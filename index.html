@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>localhost:8000 – bouquet</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#03071a;--bar:#9bb34a}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:#fff;font-family:ui-monospace,Menlo,Consolas,monospace;min-height:100vh;display:flex;flex-direction:column;align-items:center}
+.bar{width:100%;max-width:560px;background:var(--bar);color:#1b2a05;padding:8px 12px;display:flex;gap:10px;align-items:center;font-size:14px}
+.url{flex:1;background:rgba(255,255,255,.35);border-radius:14px;padding:4px 12px}
+canvas{display:block;max-width:100%}
+p{margin:6px 12px 20px;font-size:13px;opacity:.6;text-align:center}
+</style>
+</head>
+<body>
+<div class="bar"><span>←  →  ⟳</span><span class="url">localhost:8000</span></div>
+<canvas id="c"></canvas>
+<p>tap anywhere to replay</p>
+<script>
+const COLS=60,ROWS=42,BX=30,BY=27,T=9.6;
+const cv=document.getElementById('c'),ctx=cv.getContext('2d');
+let cw,chh,dpr=window.devicePixelRatio||1;
+function size(){const W=Math.min(innerWidth,560);cw=W/COLS;chh=cw*1.9;
+ cv.style.width=W+'px';cv.style.height=chh*ROWS+'px';cv.width=W*dpr;cv.height=chh*ROWS*dpr;ctx.setTransform(dpr,0,0,dpr,0,0)}
+size();addEventListener('resize',size);
+const flowers=[
+ {x:30,y:5,R:6,c:'#ff6b9d',p:0},{x:20,y:9,R:6,c:'#ffd166',p:1.3},{x:40,y:9,R:6,c:'#c77dff',p:2.1},
+ {x:11,y:16,R:6,c:'#ff9f68',p:3.4},{x:49,y:16,R:6,c:'#8ecae6',p:4.2},{x:24,y:17,R:5,c:'#f8f9fa',p:5.1},{x:36,y:17,R:5,c:'#ff6b9d',p:.7}];
+const stars=Array.from({length:45},()=>({x:Math.random()*COLS|0,y:Math.random()*ROWS|0,p:Math.random()*6}));
+const pr=(t,a,d)=>Math.min(1,Math.max(0,(t-a)/d));
+const ease=k=>1-Math.pow(1-k,3);
+const back=k=>1+2.7*Math.pow(k-1,3)+1.7*Math.pow(k-1,2);
+const pal=['#ff6b9d','#ffd166','#c77dff','#ffb3c8','#fff','#8ecae6'];
+let t0=performance.now(),last=t0,P=[],burst=false,buf;
+addEventListener('pointerdown',()=>{t0=performance.now();P=[];burst=false});
+function put(x,y,ch,col){x=Math.round(x);y=Math.round(y);if(x<0||y<0||x>=COLS||y>=ROWS)return;buf[y*COLS+x]=[ch,col]}
+function txt(s,x,y,c){for(let i=0;i<s.length;i++)if(s[i]!==' ')put(x+i,y,s[i],c)}
+function spawn(x,y,vx,vy,g){P.push({x,y,vx,vy,g,ph:Math.random()*6,ch:'*@~%'[Math.random()*4|0],c:pal[Math.random()*pal.length|0]})}
+function frame(now){
+ const t=(now-t0)/1000,dt=Math.min(.05,(now-last)/1000);last=now;
+ buf=new Array(COLS*ROWS).fill(null);
+ for(const s of stars)put(s.x,s.y,'.',Math.sin(t*2+s.p)>0?'#5a6bc0':'#222c66');
+ // terminal intro
+ if(t<T){[[.3,'$ node love.js'],[2.2,'> planting a seed...'],[4,'> growing...'],[6.5,'> blooming...']].forEach(([a,s],i)=>{
+  const n=Math.floor((t-a)*28);if(n>0)txt(s.slice(0,n)+(n<=s.length&&Math.floor(t*6)%2?'_':''),2,1+i,'#7cfc9a')})}
+ // falling dot
+ if(t<2.2){
+  if(t<1.2){if(Math.floor(t*3)%2===0)put(BX,6,'.','#fff')}
+  else{const k=pr(t,1.2,1),y=6+(BY-6)*k*k;for(let j=1;j<=7;j++)put(BX,y-j,j<3?'|':':','#4a5aa0');put(BX,y,'o','#fff')}
+ }
+ if(t>2.2){const k=pr(t,2.2,.9);if(k<1)for(let a=0;a<6.28;a+=.26)put(BX+Math.cos(a)*k*9,BY+Math.sin(a)*k*9/1.9,k<.6?'*':'.','#9bd')}
+ // heart
+ if(t>T){const sw=pr(t,T,2.2),beat=1+.04*Math.sin(t*4);
+  for(let a=0;a<sw*6.283;a+=.035){const s=Math.sin(a),f=13*Math.cos(a)-5*Math.cos(2*a)-2*Math.cos(3*a)-Math.cos(4*a);
+   put(BX+1.55*16*s*s*s*beat,15-f*beat,Math.floor(a*20)%2?'+':'.','#ff4d8d')}}
+ // stems + flowers
+ const cs=flowers.map((f,i)=>{const k=ease(pr(t,2.4+i*.25,1.6));
+  return{f,i,k,cx:f.x+Math.sin(t*.9+f.p)*1.4*k,cy:f.y+Math.cos(t*.7+f.p)*.5*k}});
+ for(const{k,cx,cy}of cs){if(k<=0)continue;const n=Math.floor(44*k);
+  for(let j=0;j<=n;j++)put(BX+(cx-BX)*j/44,BY+(cy-BY)*j/44,':','#4caf50')}
+ for(const{f,i,k,cx,cy}of cs){
+  if(k<=0)continue;
+  const bk=pr(t,4.6+i*.45,1.5);
+  const tx=BX+(cx-BX)*k,ty=BY+(cy-BY)*k;
+  if(bk<.15)put(tx,ty,'o',f.c);
+  if(bk<=0)continue;
+  const R=f.R*back(bk);
+  for(let dy=-8;dy<=8;dy++)for(let dx=-9;dx<=9;dx++){
+   const d=Math.hypot(dx,dy*1.9),a=Math.atan2(dy*1.9,dx);
+   const lim=R*(.6+.4*Math.abs(Math.cos(2.5*(a+t*.2))));
+   if(d>lim)continue;const r=d/lim;
+   if(r<.25)put(cx+dx,cy+dy,'0','#ffe066');else put(cx+dx,cy+dy,r<.55?'@':r<.8?'%':'*',f.c)}}
+ // wrap
+ const wk=pr(t,7.2,1.2);
+ if(wk>0)for(let y=28;y<=28+7*wk;y++){const w=8-(y-28)*.9;
+  for(let x=Math.ceil(BX-w);x<=BX+w;x++)put(x,y,y===31?'~':'=-#'[(x+y)%3],y===31?'#ff6b9d':'#f4e3c1')}
+ // cat
+ const ck=pr(t,8.6,.9);
+ if(ck>0){const off=Math.round((1-ease(ck))*7),eye=(t>T&&t%3<.15)?'-w-':'owo';
+  [" /\\_/\\ ","( "+eye+" )"," /|<3|\\ ","  U U  "].forEach((r,i)=>{
+   for(let j=0;j<r.length;j++)if(r[j]!==' ')put(BX-3+j,36+i+off,r[j],'<3'.includes(r[j])?'#ff6b9d':'#fff')});
+  if(ck>=1&&t<T)put(BX+5,36,'!','#ffe066')}
+ // finale
+ if(t>T){
+  if(!burst){burst=true;for(let i=0;i<70;i++){const a=Math.random()*6.283,s=10+Math.random()*28;spawn(BX,15,Math.cos(a)*s,Math.sin(a)*s*.55-6,14)}}
+  const r=(t-T)*24;
+  if(r<46)for(let a=0;a<6.283;a+=.09)put(BX+Math.cos(a)*r,15+Math.sin(a)*r/1.9,r<20?'@':r<32?'*':'.','#ffd1e8');
+  if(Math.random()<dt*12&&P.length<170)spawn(Math.random()*COLS,-1,0,3+Math.random()*3,1);
+  const m='for a special someone \u2665',n=Math.floor((t-T-.6)*16);
+  if(n>0)txt(m.slice(0,n),Math.floor((COLS-m.length)/2),1,'#ffd1e8');
+ }
+ for(let i=P.length-1;i>=0;i--){const p=P[i];
+  p.vy+=p.g*dt;p.vx=p.vx*.985+Math.sin(t*3+p.ph)*4*dt;p.vy*=.995;p.x+=p.vx*dt;p.y+=p.vy*dt;
+  if(p.y>ROWS+1||p.x<-2||p.x>COLS+2)P.splice(i,1);else put(p.x,p.y,p.ch,p.c)}
+ ctx.clearRect(0,0,cv.width,cv.height);
+ ctx.font=(cw*1.6)+'px ui-monospace,Menlo,Consolas,monospace';ctx.textAlign='center';ctx.textBaseline='middle';
+ for(let i=0;i<buf.length;i++){const c=buf[i];if(!c)continue;ctx.fillStyle=c[1];ctx.fillText(c[0],(i%COLS+.5)*cw,((i/COLS|0)+.5)*chh)}
+ requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
